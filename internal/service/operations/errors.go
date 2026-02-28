@@ -3,6 +3,7 @@ package operations
 import "errors"
 
 var (
-	ErrInvalidInput       = errors.New("invalid input")
-	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrInvalidInput = errors.New("invalid input")
+	ErrNotFound     = errors.New("not found")
+	ErrForbidden    = errors.New("forbidden")
 )
