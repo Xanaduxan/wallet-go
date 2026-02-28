@@ -32,65 +32,70 @@ func SetAuthService(s *auth.Service) { authService = s }
 
 func Registration(w http.ResponseWriter, r *http.Request) {
 	var req RegistrationRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 	if err := req.Validate(); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		http.Error(w, "invalid input", http.StatusBadRequest)
 		return
 	}
 
 	token, err := authService.Registration(req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, auth.ErrValidationFailed) {
+		switch {
+		case errors.Is(err, auth.ErrInvalidInput):
+			http.Error(w, "invalid input", http.StatusBadRequest)
+			return
+		case errors.Is(err, auth.ErrEmailTaken):
 			http.Error(w, "email already taken", http.StatusConflict)
 			return
+		default:
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	}
-	resp := RegistrationResponse{AccessToken: token}
-	writeJSON(w, http.StatusCreated, resp)
+
+	writeJSON(w, http.StatusCreated, RegistrationResponse{AccessToken: token})
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 	if err := req.Validate(); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		http.Error(w, "invalid input", http.StatusBadRequest)
 		return
 	}
+
 	token, err := authService.Login(req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, auth.ErrInvalidCredentials) {
+		switch {
+		case errors.Is(err, auth.ErrInvalidInput):
+			http.Error(w, "invalid input", http.StatusBadRequest)
+			return
+		case errors.Is(err, auth.ErrInvalidCredentials):
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 			return
+		default:
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
 		}
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
 	}
-	resp := LoginResponse{AccessToken: token}
-	writeJSON(w, http.StatusOK, resp)
+
+	writeJSON(w, http.StatusOK, LoginResponse{AccessToken: token})
 }
 
 func DeleteMe(w http.ResponseWriter, r *http.Request) {
-
-	emailValue := r.Context().Value("email")
-
-	email, ok := emailValue.(string)
-	if !ok || email == "" {
+	email, _ := r.Context().Value("email").(string)
+	if email == "" {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	err := authService.DeleteByEmail(email)
-	if err != nil {
+	if err := authService.DeleteByEmail(email); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -98,17 +103,16 @@ func DeleteMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func validateEmailPassword(email, password string) error {
-	if email == "" || password == "" {
-		return errors.New("email and password required")
+func (req RegistrationRequest) Validate() error {
+	if req.Email == "" || req.Password == "" {
+		return auth.ErrInvalidInput
 	}
 	return nil
 }
 
-func (req RegistrationRequest) Validate() error {
-	return validateEmailPassword(req.Email, req.Password)
-}
-
 func (req LoginRequest) Validate() error {
-	return validateEmailPassword(req.Email, req.Password)
+	if req.Email == "" || req.Password == "" {
+		return auth.ErrInvalidInput
+	}
+	return nil
 }

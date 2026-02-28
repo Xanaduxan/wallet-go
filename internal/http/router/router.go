@@ -7,17 +7,25 @@ import (
 	"github.com/Xanaduxan/wallet-go/internal/http/handlers/middleware"
 )
 
-func New() http.Handler {
+func New(jwtSecret []byte) http.Handler {
 	mux := http.NewServeMux()
+
 	mux.Handle(
 		"GET /me",
-		middleware.JWT(http.HandlerFunc(handlers.Me)),
+		middleware.JWT(jwtSecret)(http.HandlerFunc(handlers.Me)),
 	)
+
 	mux.HandleFunc("POST /login", handlers.Login)
 	mux.HandleFunc("POST /registration", handlers.Registration)
+
 	mux.Handle(
 		"DELETE /me",
-		middleware.JWT(http.HandlerFunc(handlers.DeleteMe)),
+		middleware.JWT(jwtSecret)(http.HandlerFunc(handlers.DeleteMe)),
 	)
+	mux.Handle(
+		"POST /operation",
+		middleware.JWT(jwtSecret)(http.HandlerFunc(handlers.CreateOperation)),
+	)
+
 	return mux
 }

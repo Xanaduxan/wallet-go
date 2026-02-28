@@ -13,19 +13,12 @@ import (
 )
 
 type Service struct {
-	users *storage.UserStorage
+	users     *storage.UserStorage
+	jwtSecret []byte
 }
 
-var JwtSecret = []byte("secret")
-
-var (
-	ErrValidationFailed   = errors.New("validation failed")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrInvalidInput       = errors.New("email and password required")
-)
-
-func NewService(users *storage.UserStorage) *Service {
-	return &Service{users: users}
+func NewService(users *storage.UserStorage, jwtSecret []byte) *Service {
+	return &Service{users: users, jwtSecret: jwtSecret}
 }
 
 func (s *Service) Registration(email, password string) (string, error) {
@@ -40,7 +33,7 @@ func (s *Service) Registration(email, password string) (string, error) {
 	}
 
 	user := storage.User{
-		ID:       uuid.NewString(),
+		ID:       uuid.New(),
 		Email:    email,
 		Password: string(hash),
 	}
@@ -76,23 +69,12 @@ func (s *Service) Login(email, password string) (string, error) {
 }
 
 func (s *Service) DeleteByEmail(email string) error {
-
 	user, err := s.users.GetByEmail(email)
 	if err != nil {
 		return err
 	}
 
-	id, err := uuid.Parse(user.ID)
-	if err != nil {
-		return err
-	}
-
-	err = s.users.DeleteByID(id)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.users.DeleteByID(user.ID)
 }
 
 func (s *Service) generateToken(email string) (string, error) {
@@ -102,7 +84,7 @@ func (s *Service) generateToken(email string) (string, error) {
 		"exp":   time.Now().Add(24 * time.Hour).Unix(),
 	})
 
-	tokenString, err := token.SignedString(JwtSecret)
+	tokenString, err := token.SignedString(s.jwtSecret)
 	if err != nil {
 		return "", err
 	}
